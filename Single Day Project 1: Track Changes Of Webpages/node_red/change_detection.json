@@ -1,0 +1,407 @@
+[
+    {
+        "id": "4beea4d5cd9ec53e",
+        "type": "tab",
+        "label": "Change Detection Flow",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "b4dd43c9.6450b",
+        "type": "inject",
+        "z": "4beea4d5cd9ec53e",
+        "name": "Periodic Check",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "10800",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 380,
+        "y": 220,
+        "wires": [
+            [
+                "f1948b48.0d6f8"
+            ]
+        ]
+    },
+    {
+        "id": "f1948b48.0d6f8",
+        "type": "function",
+        "z": "4beea4d5cd9ec53e",
+        "name": "Prepare SQL Query",
+        "func": "msg.topic = String(`SELECT * FROM Websites`);\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 460,
+        "y": 280,
+        "wires": [
+            [
+                "b67e1390.7d8578"
+            ]
+        ]
+    },
+    {
+        "id": "b67e1390.7d8578",
+        "type": "mysql",
+        "z": "4beea4d5cd9ec53e",
+        "mydb": "a98a4e0.5c6d3b8",
+        "name": "",
+        "x": 560,
+        "y": 340,
+        "wires": [
+            [
+                "b11e5ea7.1e7f9"
+            ]
+        ]
+    },
+    {
+        "id": "b11e5ea7.1e7f9",
+        "type": "function",
+        "z": "4beea4d5cd9ec53e",
+        "name": "Save Websites To Check",
+        "func": "// Check if msg.payload has data\nif (msg.payload && msg.payload.length > 0) {\n    // Store the results in a flow context variable\n    flow.set('websiteData', msg.payload);\n    msg.payload = 'Data saved to flow context'; // Optional message\n\n    // Send the message to the next node or debug node\n    return msg;\n}\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 670,
+        "y": 400,
+        "wires": [
+            [
+                "f751b2d278b818a6"
+            ]
+        ]
+    },
+    {
+        "id": "f751b2d278b818a6",
+        "type": "function",
+        "z": "4beea4d5cd9ec53e",
+        "name": "Loop Thru Websites To Check",
+        "func": "\nvar websiteData = flow.get('websiteData')[0];\nmsg.currentWebsite = websiteData;\nmsg.url = websiteData.url;\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 850,
+        "y": 480,
+        "wires": [
+            [
+                "a1841a56321c4698"
+            ]
+        ]
+    },
+    {
+        "id": "eb80ac7764946364",
+        "type": "hash sha256",
+        "z": "4beea4d5cd9ec53e",
+        "name": "",
+        "x": 1290,
+        "y": 360,
+        "wires": [
+            [
+                "315cc3feccf6fedd"
+            ]
+        ]
+    },
+    {
+        "id": "315cc3feccf6fedd",
+        "type": "function",
+        "z": "4beea4d5cd9ec53e",
+        "name": "Compare",
+        "func": "var nhash = msg.payload\nvar currentWebsite = msg.currentWebsite\nvar websiteData = flow.get('websiteData');\nvar deletedWebsite = websiteData.splice(0, 1); // Remove 1 item starting at index 0\n\nif (currentWebsite && currentWebsite.hash) {\n    if (nhash !== currentWebsite.hash){\n        msg.topic = String(`\n            BEGIN;\n    SELECT hash INTO @previous_hash FROM Websites WHERE website_id = ${currentWebsite.website_id};\n    UPDATE Websites SET hash = '${nhash}' WHERE website_id = ${currentWebsite.website_id};\n    INSERT INTO Change_History (website_id, change_timestamp, previous_hash, current_hash, change_details)\n    VALUES (${currentWebsite.website_id}, NOW(), @previous_hash, '${nhash}', '');\n    COMMIT`);\n    //node.send([msg,null]);\n        msg.secondQuery = String(`SELECT\n    Websites.website_id,\n    Websites.url,\n    Websites.hash,\n    Categories.change_action\nFROM Websites\nJOIN Website_Categories ON Websites.website_id = Website_Categories.website_id\nJOIN Categories ON Website_Categories.category_id = Categories.category_id\nWHERE Websites.website_id = ${currentWebsite.website_id}`);\n\n        return[msg,null,null]\n    }else{\n        if (websiteData.some(function(obj) {\n        return Object.keys(obj).length > 0;\n        })){\n            return [null,null,msg]\n        }\n    }\n}else{\n    //where website hash is never defined before\n    \n    msg.topic = `UPDATE Websites SET hash = '${nhash}' WHERE website_id = ${currentWebsite.website_id}`;\n    return[null,msg,null]\n}\n\n/*SELECT\n    Websites.website_id,\n    Websites.url,\n    Websites.hash,\n    Categories.change_action\nFROM Websites\nJOIN Website_Categories ON Websites.website_id = Website_Categories.website_id\nJOIN Categories ON Website_Categories.category_id = Categories.category_id;\n*/",
+        "outputs": 3,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1360,
+        "y": 240,
+        "wires": [
+            [
+                "1c9daa54ccbd3e2a",
+                "d8ec373535175498",
+                "d126370e6286d5f1",
+                "f751b2d278b818a6"
+            ],
+            [
+                "d8ec373535175498",
+                "f751b2d278b818a6"
+            ],
+            [
+                "f751b2d278b818a6"
+            ]
+        ]
+    },
+    {
+        "id": "d8ec373535175498",
+        "type": "mysql",
+        "z": "4beea4d5cd9ec53e",
+        "mydb": "a98a4e0.5c6d3b8",
+        "name": "",
+        "x": 1600,
+        "y": 160,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "1b675f19ae16c9aa",
+        "type": "http request",
+        "z": "4beea4d5cd9ec53e",
+        "name": "",
+        "method": "GET",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [
+            {
+                "keyType": "other",
+                "keyValue": "Accept",
+                "valueType": "other",
+                "valueValue": "text/html"
+            }
+        ],
+        "x": 1130,
+        "y": 480,
+        "wires": [
+            [
+                "997bf64b4ab0abf5"
+            ]
+        ]
+    },
+    {
+        "id": "d126370e6286d5f1",
+        "type": "function",
+        "z": "4beea4d5cd9ec53e",
+        "name": "save past html",
+        "func": "var htmlcontent = msg.webhtml\nvar wsid = msg.currentWebsite.website_id\nmsg = {}\nmsg.payload = htmlcontent\n\n\n\n// Generate a unique file name with an epoch timestamp\nvar timestamp = new Date().getTime(); // Get current epoch timestamp in milliseconds\nvar fileName = `${timestamp}_${wsid}.html`; // Construct the file name\n\n// Set the file name in the 'msg' object\n//msg.filename = fileName;\n\n// Specify the file path where you want to save the file\nvar filename =  \"/your/pathway/\"+ fileName; // Replace with your desired folder path\n\n// Set the file path in the 'msg' object\nmsg.filename = filename;\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1600,
+        "y": 280,
+        "wires": [
+            [
+                "c52512ca1dbc9634"
+            ]
+        ]
+    },
+    {
+        "id": "a7c59dc1f71c1528",
+        "type": "function",
+        "z": "4beea4d5cd9ec53e",
+        "name": "Action!",
+        "func": "\nvar results = msg.payload;\n\nfor (var i = 0; i < results.length; i++) {\n    var website = results[i];\n    var url = website.url;\n    var changeAction = website.change_action;\n\n    if (changeAction.includes(\"discord\")) {\n        // This change action contains \"discord,\" indicating a webhook\n        // Send a message using the HTML node (or other appropriate method)\n        msg.payload = `Change detected in ${url}`;\n        msg.url = changeAction;\n        \n        msg.method = 'POST';\n        msg.headers = {\n            'Content-Type': 'application/json'\n        };\n        msg.payload = {\n            content: `Node-red found change in ${url}`\n        };\n        return msg;\n    }\n}\n\n// If no \"discord\" change action was found, push to the second output\nreturn [null, msg];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1950,
+        "y": 340,
+        "wires": [
+            [
+                "a2d3acee82699aef"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "a2d3acee82699aef",
+        "type": "http request",
+        "z": "4beea4d5cd9ec53e",
+        "name": "",
+        "method": "use",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 2090,
+        "y": 280,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "863139d6e58791b8",
+        "type": "mysql",
+        "z": "4beea4d5cd9ec53e",
+        "mydb": "a98a4e0.5c6d3b8",
+        "name": "",
+        "x": 1860,
+        "y": 280,
+        "wires": [
+            [
+                "a7c59dc1f71c1528"
+            ]
+        ]
+    },
+    {
+        "id": "e1e6efa1ccf04b43",
+        "type": "change",
+        "z": "4beea4d5cd9ec53e",
+        "name": "",
+        "rules": [
+            {
+                "t": "set",
+                "p": "topic",
+                "pt": "msg",
+                "to": "secondQuery",
+                "tot": "msg"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 1790,
+        "y": 220,
+        "wires": [
+            [
+                "863139d6e58791b8"
+            ]
+        ]
+    },
+    {
+        "id": "1c9daa54ccbd3e2a",
+        "type": "delay",
+        "z": "4beea4d5cd9ec53e",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "5",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 1580,
+        "y": 220,
+        "wires": [
+            [
+                "e1e6efa1ccf04b43"
+            ]
+        ]
+    },
+    {
+        "id": "997bf64b4ab0abf5",
+        "type": "change",
+        "z": "4beea4d5cd9ec53e",
+        "name": "",
+        "rules": [
+            {
+                "t": "set",
+                "p": "webhtml",
+                "pt": "msg",
+                "to": "payload",
+                "tot": "msg"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 1210,
+        "y": 420,
+        "wires": [
+            [
+                "eb80ac7764946364"
+            ]
+        ]
+    },
+    {
+        "id": "c52512ca1dbc9634",
+        "type": "file",
+        "z": "4beea4d5cd9ec53e",
+        "name": "",
+        "filename": "filename",
+        "filenameType": "msg",
+        "appendNewline": true,
+        "createDir": false,
+        "overwriteFile": "true",
+        "encoding": "none",
+        "x": 1700,
+        "y": 340,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "a1841a56321c4698",
+        "type": "delay",
+        "z": "4beea4d5cd9ec53e",
+        "name": "",
+        "pauseType": "rate",
+        "timeout": "5",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "5",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 1020,
+        "y": 540,
+        "wires": [
+            [
+                "1b675f19ae16c9aa"
+            ]
+        ]
+    },
+    {
+        "id": "a98a4e0.5c6d3b8",
+        "type": "MySQLdatabase",
+        "name": "",
+        "host": "127.0.0.1",
+        "port": "3306",
+        "db": "231023_cdodp",
+        "tz": "",
+        "charset": ""
+    }
+]
