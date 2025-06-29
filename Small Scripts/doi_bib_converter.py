@@ -45,7 +45,7 @@ HTML_TEMPLATE = """
     <meta charset="utf-8">
     <style>
         body { 
-            font-family: Arial, sans-serif; 
+            font-family: Helvetica, sans-serif; 
             max-width: 800px; 
             margin: 50px auto; 
             padding: 20px;
@@ -247,8 +247,8 @@ See https://doi.org/10.1126/science.1234567 for details..."></textarea>
         <div id="result"></div>
         
         <div class="footer">
-            <p>Script available at: <a href="https://github.com" target="_blank">Github</a></p>
-            <p>Created by: TheKing</p>
+            <p>Script available at: <a href="https://github.com/NitroxHead/blog_posts/blob/main/Small%20Scripts/doi_bib_converter.py" target="_blank">Github</a></p>
+            <p>Created by: NitroxHead</p>
         </div>
     </div>
 
