@@ -87,28 +87,47 @@ upload_and_verify() {
     # Upload to Google Drive
     log_message "Uploading ${new_filename} to ${GDRIVE_DEST}..."
     
+    # Use copyto for explicit file naming to avoid path confusion
     if [ "$VERIFY_HASH" = "true" ]; then
-        rclone copy "$temp_renamed" "$GDRIVE_DEST" --checksum --verbose >> "$LOG_FILE" 2>&1
+        rclone copyto "$temp_renamed" "${GDRIVE_DEST}/${new_filename}" --checksum --verbose >> "$LOG_FILE" 2>&1
     else
-        rclone copy "$temp_renamed" "$GDRIVE_DEST" --verbose >> "$LOG_FILE" 2>&1
+        rclone copyto "$temp_renamed" "${GDRIVE_DEST}/${new_filename}" --verbose >> "$LOG_FILE" 2>&1
     fi
     
-    if [ $? -ne 0 ]; then
-        log_message "ERROR: Upload failed for ${new_filename}"
+    upload_status=$?
+    if [ $upload_status -ne 0 ]; then
+        log_message "ERROR: Upload failed for ${new_filename} (exit code: $upload_status)"
+        log_message "Attempted path: ${GDRIVE_DEST}/${new_filename}"
         rm -f "$temp_renamed"
         return 1
     fi
+    log_message "Upload completed successfully"
     
     # Verify upload with hash check if enabled
     if [ "$VERIFY_HASH" = "true" ]; then
         log_message "Verifying upload integrity..."
-        rclone check "$temp_renamed" "${GDRIVE_DEST}/${new_filename}" --checksum >> "$LOG_FILE" 2>&1
         
-        if [ $? -ne 0 ]; then
-            log_message "ERROR: Hash verification failed for ${new_filename}"
+        # Get remote hash
+        remote_hash=$(rclone md5sum "${GDRIVE_DEST}/${new_filename}" 2>> "$LOG_FILE" | awk '{print $1}')
+        
+        if [ -z "$remote_hash" ]; then
+            log_message "ERROR: Could not retrieve remote hash for ${new_filename}"
+            log_message "Checking if file exists on remote..."
+            rclone lsf "${GDRIVE_DEST}/${new_filename}" >> "$LOG_FILE" 2>&1
             rm -f "$temp_renamed"
             return 1
         fi
+        
+        log_message "Remote hash: ${remote_hash}"
+        
+        if [ "$local_hash" != "$remote_hash" ]; then
+            log_message "ERROR: Hash mismatch for ${new_filename}"
+            log_message "Local:  ${local_hash}"
+            log_message "Remote: ${remote_hash}"
+            rm -f "$temp_renamed"
+            return 1
+        fi
+        
         log_message "SUCCESS: Hash verification passed for ${new_filename}"
     fi
     
